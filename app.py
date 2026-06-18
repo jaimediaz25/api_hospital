@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import os
 from datetime import datetime
@@ -18,8 +18,12 @@ from routes.analytics import analytics_bp
 from routes.studies import studies_bp
 from routes.pdf import pdf_bp
 from routes.exams import exams_bp
+from routes.billing import billing_bp
+from routes.administrative import admin_bp, mobile_admin_bp
+from middleware.auth_middleware import token_required
 
 def create_app():
+    
     app = Flask(__name__)
     app.config['SECRET_KEY'] = config.SECRET_KEY
     
@@ -28,6 +32,7 @@ def create_app():
     
     # Registrar blueprints
     app.register_blueprint(auth_bp, url_prefix=f'{config.API_PREFIX}/auth')
+    app.register_blueprint(mobile_admin_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(patients_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(medical_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(beds_bp, url_prefix=f'{config.API_PREFIX}')
@@ -38,6 +43,28 @@ def create_app():
     app.register_blueprint(studies_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(pdf_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(exams_bp, url_prefix=f'{config.API_PREFIX}/exams')
+    app.register_blueprint(billing_bp, url_prefix=f'{config.API_PREFIX}')
+    app.register_blueprint(admin_bp, url_prefix=f'{config.API_PREFIX}')
+
+    @app.before_request
+    def log_request_start():
+        print(
+        f">>> PETICIÓN RECIBIDA: {request.method} {request.full_path}",
+        flush=True
+    )
+    
+
+    @app.route(f'{config.API_PREFIX}/analytics/dashboard', methods=['GET'])
+    @token_required
+    def dashboard_fallback():
+        from services.analytics_service import AnalyticsService
+        return jsonify(AnalyticsService.get_dashboard_stats()), 200
+
+    @app.route(f'{config.API_PREFIX}/studies/counts', methods=['GET'])
+    @token_required
+    def studies_counts_fallback():
+        from services.exam_service import ExamService
+        return jsonify(ExamService.get_counts()), 200
     
     # Ruta de salud
     @app.route('/health', methods=['GET'])
@@ -70,6 +97,7 @@ def create_app():
     def internal_error(error):
         return jsonify({'error': 'Error interno del servidor'}), 500
     
+
     return app
 
 if __name__ == '__main__':

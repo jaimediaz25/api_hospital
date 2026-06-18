@@ -1,5 +1,5 @@
 from utils.database import get_collection, serialize_doc
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import pandas as pd
 from fpdf import FPDF
@@ -7,6 +7,45 @@ import tempfile
 import os
 
 class ReportService:
+    @staticmethod
+    def _parse_date(value):
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, date):
+            return datetime.combine(value, datetime.min.time())
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return None
+            try:
+                parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+                return parsed.replace(tzinfo=None)
+            except ValueError:
+                pass
+
+            candidates = [raw]
+            if 'T' in raw:
+                candidates.append(raw.split('T')[0].strip())
+            if ' ' in raw:
+                candidates.append(raw.split(' ')[0].strip())
+
+            for candidate in dict.fromkeys(candidates):
+                for fmt in (
+                    '%Y-%m-%d %H:%M:%S',
+                    '%Y-%m-%d %H:%M',
+                    '%d/%m/%Y %H:%M:%S',
+                    '%d/%m/%Y %H:%M',
+                    '%Y-%m-%d',
+                    '%d/%m/%Y',
+                ):
+                    try:
+                        return datetime.strptime(candidate, fmt)
+                    except ValueError:
+                        continue
+        return None
+
     @staticmethod
     def get_census(area=None):
         """Obtiene censo de pacientes"""
@@ -63,9 +102,10 @@ class ReportService:
         
         # Calcular edad
         for p in patients:
-            if p.get('fecnac'):
-                edad = datetime.now().year - p['fecnac'].year
-                if (datetime.now().month, datetime.now().day) < (p['fecnac'].month, p['fecnac'].day):
+            birth_date = ReportService._parse_date(p.get('fecnac'))
+            if birth_date:
+                edad = datetime.now().year - birth_date.year
+                if (datetime.now().month, datetime.now().day) < (birth_date.month, birth_date.day):
                     edad -= 1
                 p['edad'] = edad
             else:
