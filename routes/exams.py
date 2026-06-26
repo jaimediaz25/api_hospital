@@ -147,7 +147,7 @@ def test_exams():
 def get_pending_exams():
     exam_type = request.args.get('type')
     page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 20))
+    limit = int(request.args.get('limit', 5))
     exams = ExamService.get_pending_exams(exam_type, page, limit)
     return jsonify(exams), 200
 
@@ -158,7 +158,7 @@ def get_pending_exams():
 def get_completed_exams():
     exam_type = request.args.get('type')
     page = int(request.args.get('page', 1))
-    limit = int(request.args.get('limit', 20))
+    limit = int(request.args.get('limit', 5))
     exams = ExamService.get_completed_exams(exam_type, page, limit)
     return jsonify(exams), 200
 
@@ -395,6 +395,34 @@ def get_exam_files(id_examen):
         return jsonify(files), 200
     except Exception as e:
         print(f"Error en get_exam_files: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+    
+
+# ===================================================================
+#  ELIMINAR RESULTADOS (LABORATORIO / GABINETE)
+# ===================================================================
+@exams_bp.route('/<int:id_examen>/results', methods=['DELETE'])
+@token_required
+@role_required('admin', 'estudios')
+def delete_exam_results(id_examen):
+    """
+    Elimina los resultados (archivos y registros) de un examen completo.
+    Se espera el tipo ('LABORATORIO' o 'GABINETE') en los query params.
+    """
+    try:
+        exam_type = request.args.get('type', '').upper()
+        if exam_type not in ('LABORATORIO', 'GABINETE'):
+            return jsonify({'error': 'Tipo de examen no válido'}), 400
+
+        result = ExamService.delete_exam_results(id_examen, exam_type)
+        if not result:
+            return jsonify({'error': 'No se encontraron resultados para eliminar'}), 404
+
+        return jsonify({'message': f'Resultados de {exam_type.lower()} eliminados correctamente'}), 200
+    except Exception as e:
+        print(f"Error en delete_exam_results: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500

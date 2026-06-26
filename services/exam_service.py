@@ -21,7 +21,7 @@ class ExamService:
 # o agrega los parámetros.
 
     @staticmethod
-    def get_pending_exams(exam_type=None, page=1, limit=20):
+    def get_pending_exams(exam_type=None, page=1, limit=5):
         db = get_collection('examenes_det').database
         skip = (page - 1) * limit
 
@@ -93,7 +93,7 @@ class ExamService:
 
 
     @staticmethod
-    def get_completed_exams(exam_type=None, page=1, limit=20):
+    def get_completed_exams(exam_type=None, page=1, limit=5):
         db = get_collection('examenes_det').database
         skip = (page - 1) * limit
 
@@ -559,3 +559,56 @@ class ExamService:
                             'url': f'/static/resultados/{folder}/{nombre}'
                         }
         return list(archivos_dict.values())
+    
+
+
+    @staticmethod
+    def delete_exam_results(id_examen, exam_type):
+        """
+        Elimina los archivos físicos y los registros de detalles de un examen.
+        Si no quedan detalles, elimina también el encabezado del examen.
+        """
+        db = get_collection('examenes_det').database
+
+        # Obtener los id_catalogo según el tipo
+        ids_catalogo = ExamService._get_catalog_ids_by_type(exam_type)
+        if not ids_catalogo:
+            return False
+
+        # 1. Obtener los archivos asociados a ese examen y tipo
+        rows = list(db['examenes_det'].find(
+            {"id_examen": id_examen, "id_catalogo": {"$in": ids_catalogo}},
+            {"archivo_resultado": 1}
+        ))
+
+        # 2. Eliminar archivos físicos
+        upload_folder = 'static/resultados/laboratorio' if exam_type.upper() == 'LABORATORIO' else 'static/resultados/gabinete'
+        for row in rows:
+            archivo = row.get('archivo_resultado')
+            if archivo:
+                for nombre in archivo.split(','):
+                    nombre = nombre.strip()
+                    if nombre:
+                        ruta = os.path.join(upload_folder, nombre)
+                        if os.path.exists(ruta):
+                            try:
+                                os.remove(ruta)
+                                print(f"Archivo eliminado: {ruta}")
+                            except Exception as e:
+                                print(f"Error al eliminar {ruta}: {e}")
+
+        # 3. Eliminar los detalles del examen para ese tipo
+        result_det = db['examenes_det'].delete_many(
+            {"id_examen": id_examen, "id_catalogo": {"$in": ids_catalogo}}
+        )
+
+        # 4. Verificar si quedan otros detalles (de otro tipo)
+        restantes = db['examenes_det'].count_documents({"id_examen": id_examen})
+        if restantes == 0:
+            # Si no quedan detalles, eliminar el encabezado del examen
+            db['examenes'].delete_one({"id_examen": id_examen})
+            print(f"Encabezado del examen {id_examen} eliminado (sin detalles restantes)")
+        else:
+            print(f"Quedan {restantes} detalles para el examen {id_examen}, no se elimina el encabezado")
+
+        return result_det.deleted_count > 0
