@@ -21,7 +21,11 @@ class Config:
     API_PREFIX = "/api/v1"
     
     # CORS
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', '*').split(',')
+    CORS_ORIGINS = [
+        "http://localhost:8081",  # Expo Web
+        "http://localhost:19006", # Expo legacy
+        "http://localhost:3000",  # React
+    ]
     
     # Paginación
     DEFAULT_PAGE_SIZE = 20

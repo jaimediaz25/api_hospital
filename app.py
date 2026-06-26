@@ -28,7 +28,12 @@ def create_app():
     app.config['SECRET_KEY'] = config.SECRET_KEY
     
     # Configurar CORS
-    CORS(app, origins=config.CORS_ORIGINS, supports_credentials=True)
+    #CORS(app, origins=config.CORS_ORIGINS, supports_credentials=True)
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": config.CORS_ORIGINS}},
+        supports_credentials=True
+    )
     
     # Registrar blueprints
     app.register_blueprint(auth_bp, url_prefix=f'{config.API_PREFIX}/auth')
