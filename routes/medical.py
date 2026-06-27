@@ -501,3 +501,165 @@ def add_prescription(id_atencion):
         return jsonify(serialize_doc(prescription)), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+################################################################
+############# enfermeria
+###############################################################
+
+@medical_bp.route('/appointments/<int:id_atencion>/nursing-notes', methods=['POST'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def add_nursing_note(id_atencion):
+    """
+    Registra una nota de enfermería para un paciente
+    """
+    try:
+        db = get_db()
+        data = request.get_json()
+        
+        # Verificar que la atención existe
+        atencion = db['atencion'].find_one({'id_atencion': id_atencion})
+        if not atencion:
+            return jsonify({'error': 'Atención no encontrada'}), 404
+        
+        # Crear la nota de enfermería
+        nursing_note = {
+            'id_nota': get_next_sequence('nursing_notes_id'),
+            'id_atencion': id_atencion,
+            'Id_exp': atencion['Id_exp'],
+            'nota': data.get('nota_enfermeria', ''),
+            'id_enfermero': ObjectId(g.user['user_id']),
+            'fecha_registro': datetime.now()
+        }
+        
+        db['nursing_notes'].insert_one(nursing_note)
+        
+        return jsonify({
+            'message': 'Nota de enfermería guardada correctamente',
+            'id_nota': nursing_note['id_nota']
+        }), 201
+        
+    except Exception as e:
+        print(f"Error en add_nursing_note: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/nursing-notes', methods=['GET'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def get_nursing_notes(id_atencion):
+    """
+    Obtiene el historial de notas de enfermería de un paciente
+    """
+    try:
+        db = get_db()
+        
+        pipeline = [
+            {'$match': {'id_atencion': id_atencion}},
+            {'$lookup': {
+                'from': 'users',
+                'localField': 'id_enfermero',
+                'foreignField': '_id',
+                'as': 'enfermero'
+            }},
+            {'$unwind': {'path': '$enfermero', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                'id_nota': 1,
+                'nota': 1,
+                'fecha_registro': 1,
+                'enfermero_nombre': {'$concat': [
+                    {'$ifNull': ['$enfermero.nombre', '']}, ' ',
+                    {'$ifNull': ['$enfermero.papell', '']}
+                ]}
+            }},
+            {'$sort': {'fecha_registro': -1}}
+        ]
+        
+        notes = list(db['nursing_notes'].aggregate(pipeline))
+        
+        return jsonify([serialize_doc(n) for n in notes]), 200
+        
+    except Exception as e:
+        print(f"Error en get_nursing_notes: {e}")
+        return jsonify({'error': str(e)}), 500
+    
+@medical_bp.route('/appointments/<int:id_atencion>/medications', methods=['POST'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def add_medication(id_atencion):
+    """
+    Registra la administración de medicamentos por enfermería
+    """
+    try:
+        db = get_db()
+        data = request.get_json()
+        
+        # Verificar que la atención existe
+        atencion = db['atencion'].find_one({'id_atencion': id_atencion})
+        if not atencion:
+            return jsonify({'error': 'Atención no encontrada'}), 404
+        
+        # Crear el registro de administración
+        medication_record = {
+            'id_registro': get_next_sequence('medications_registro_id'),
+            'id_atencion': id_atencion,
+            'Id_exp': atencion['Id_exp'],
+            'medicamentos': data.get('medicamentos', []),
+            'id_enfermero': ObjectId(g.user['user_id']),
+            'fecha_registro': datetime.now()
+        }
+        
+        db['medications'].insert_one(medication_record)
+        
+        return jsonify({
+            'message': 'Administración de medicamentos registrada correctamente',
+            'id_registro': medication_record['id_registro']
+        }), 201
+        
+    except Exception as e:
+        print(f"Error en add_medication: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/medications', methods=['GET'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def get_medications(id_atencion):
+    """
+    Obtiene el historial de administración de medicamentos
+    """
+    try:
+        db = get_db()
+        
+        pipeline = [
+            {'$match': {'id_atencion': id_atencion}},
+            {'$lookup': {
+                'from': 'users',
+                'localField': 'id_enfermero',
+                'foreignField': '_id',
+                'as': 'enfermero'
+            }},
+            {'$unwind': {'path': '$enfermero', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                'id_registro': 1,
+                'medicamentos': 1,
+                'fecha_registro': 1,
+                'enfermero_nombre': {'$concat': [
+                    {'$ifNull': ['$enfermero.nombre', '']}, ' ',
+                    {'$ifNull': ['$enfermero.papell', '']}
+                ]}
+            }},
+            {'$sort': {'fecha_registro': -1}}
+        ]
+        
+        records = list(db['medications'].aggregate(pipeline))
+        
+        return jsonify([serialize_doc(r) for r in records]), 200
+        
+    except Exception as e:
+        print(f"Error en get_medications: {e}")
+        return jsonify({'error': str(e)}), 500
