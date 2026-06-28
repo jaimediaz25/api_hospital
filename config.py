@@ -22,9 +22,12 @@ class Config:
     
     # CORS
     CORS_ORIGINS = [
-        "http://localhost:8081",  # Expo Web
-        "http://localhost:19006", # Expo legacy
-        "http://localhost:3000",  # React
+        "http://localhost:8081",
+        "http://localhost:19006",
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://192.168.1.67:5173",
     ]
     
     # Paginación
