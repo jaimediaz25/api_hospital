@@ -663,3 +663,265 @@ def get_medications(id_atencion):
     except Exception as e:
         print(f"Error en get_medications: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+def _nurse_name_projection():
+    return {'$concat': [
+        {'$ifNull': ['$enfermero.nombre', '']}, ' ',
+        {'$ifNull': ['$enfermero.papell', '']}
+    ]}
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/nursing-assessment', methods=['POST'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def add_nursing_assessment(id_atencion):
+    """
+    Registra una valoración de enfermería
+    """
+    try:
+        db = get_db()
+        data = request.get_json() or {}
+
+        atencion = db['atencion'].find_one({'id_atencion': id_atencion})
+        if not atencion:
+            return jsonify({'error': 'Atención no encontrada'}), 404
+
+        assessment_record = {
+            'id_valoracion': get_next_sequence('nursing_assessment_id'),
+            'id_atencion': id_atencion,
+            'Id_exp': atencion['Id_exp'],
+            'valoracion': {
+                'estado_general': data.get('estado_general', ''),
+                'dolor': data.get('dolor', ''),
+                'movilidad': data.get('movilidad', ''),
+                'riesgo_caidas': data.get('riesgo_caidas', ''),
+                'riesgo_upp': data.get('riesgo_upp', ''),
+                'observaciones': data.get('observaciones', ''),
+            },
+            'id_enfermero': ObjectId(g.user['user_id']),
+            'fecha_registro': datetime.now()
+        }
+
+        db['nursing_assessment'].insert_one(assessment_record)
+
+        return jsonify({
+            'message': 'Valoración de enfermería guardada correctamente',
+            'id_valoracion': assessment_record['id_valoracion']
+        }), 201
+    except Exception as e:
+        print(f"Error en add_nursing_assessment: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/nursing-assessment', methods=['GET'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def get_nursing_assessment(id_atencion):
+    """
+    Obtiene historial de valoraciones de enfermería
+    """
+    try:
+        db = get_db()
+
+        pipeline = [
+            {'$match': {'id_atencion': id_atencion}},
+            {'$lookup': {
+                'from': 'users',
+                'localField': 'id_enfermero',
+                'foreignField': '_id',
+                'as': 'enfermero'
+            }},
+            {'$unwind': {'path': '$enfermero', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                'id_valoracion': 1,
+                'valoracion': 1,
+                'fecha_registro': 1,
+                'enfermero_nombre': _nurse_name_projection()
+            }},
+            {'$sort': {'fecha_registro': -1}}
+        ]
+
+        records = list(db['nursing_assessment'].aggregate(pipeline))
+        return jsonify([serialize_doc(r) for r in records]), 200
+    except Exception as e:
+        print(f"Error en get_nursing_assessment: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/fluid-balance', methods=['POST'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def add_fluid_balance(id_atencion):
+    """
+    Registra balance hídrico
+    """
+    try:
+        db = get_db()
+        data = request.get_json() or {}
+
+        atencion = db['atencion'].find_one({'id_atencion': id_atencion})
+        if not atencion:
+            return jsonify({'error': 'Atención no encontrada'}), 404
+
+        ingresos_orales = float(data.get('ingresos_orales', 0) or 0)
+        ingresos_iv = float(data.get('ingresos_iv', 0) or 0)
+        egresos_orina = float(data.get('egresos_orina', 0) or 0)
+        egresos_drenajes = float(data.get('egresos_drenajes', 0) or 0)
+
+        total_ingresos = ingresos_orales + ingresos_iv
+        total_egresos = egresos_orina + egresos_drenajes
+
+        balance_record = {
+            'id_balance': get_next_sequence('fluid_balance_id'),
+            'id_atencion': id_atencion,
+            'Id_exp': atencion['Id_exp'],
+            'ingresos_orales': ingresos_orales,
+            'ingresos_iv': ingresos_iv,
+            'egresos_orina': egresos_orina,
+            'egresos_drenajes': egresos_drenajes,
+            'total_ingresos': total_ingresos,
+            'total_egresos': total_egresos,
+            'balance_neto': total_ingresos - total_egresos,
+            'observaciones': data.get('observaciones', ''),
+            'id_enfermero': ObjectId(g.user['user_id']),
+            'fecha_registro': datetime.now()
+        }
+
+        db['fluid_balance'].insert_one(balance_record)
+
+        return jsonify({
+            'message': 'Balance hídrico guardado correctamente',
+            'id_balance': balance_record['id_balance']
+        }), 201
+    except Exception as e:
+        print(f"Error en add_fluid_balance: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/fluid-balance', methods=['GET'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def get_fluid_balance(id_atencion):
+    """
+    Obtiene historial de balance hídrico
+    """
+    try:
+        db = get_db()
+
+        pipeline = [
+            {'$match': {'id_atencion': id_atencion}},
+            {'$lookup': {
+                'from': 'users',
+                'localField': 'id_enfermero',
+                'foreignField': '_id',
+                'as': 'enfermero'
+            }},
+            {'$unwind': {'path': '$enfermero', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                'id_balance': 1,
+                'ingresos_orales': 1,
+                'ingresos_iv': 1,
+                'egresos_orina': 1,
+                'egresos_drenajes': 1,
+                'total_ingresos': 1,
+                'total_egresos': 1,
+                'balance_neto': 1,
+                'observaciones': 1,
+                'fecha_registro': 1,
+                'enfermero_nombre': _nurse_name_projection()
+            }},
+            {'$sort': {'fecha_registro': -1}}
+        ]
+
+        records = list(db['fluid_balance'].aggregate(pipeline))
+        return jsonify([serialize_doc(r) for r in records]), 200
+    except Exception as e:
+        print(f"Error en get_fluid_balance: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/nursing-care', methods=['POST'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def add_nursing_care(id_atencion):
+    """
+    Registra cuidados de enfermería
+    """
+    try:
+        db = get_db()
+        data = request.get_json() or {}
+
+        atencion = db['atencion'].find_one({'id_atencion': id_atencion})
+        if not atencion:
+            return jsonify({'error': 'Atención no encontrada'}), 404
+
+        care_record = {
+            'id_cuidado': get_next_sequence('nursing_care_id'),
+            'id_atencion': id_atencion,
+            'Id_exp': atencion['Id_exp'],
+            'diagnostico_enfermeria': data.get('diagnostico_enfermeria', ''),
+            'objetivos': data.get('objetivos', ''),
+            'intervenciones': data.get('intervenciones', ''),
+            'evaluacion': data.get('evaluacion', ''),
+            'estado': data.get('estado', 'EN_PROCESO'),
+            'observaciones': data.get('observaciones', ''),
+            'id_enfermero': ObjectId(g.user['user_id']),
+            'fecha_registro': datetime.now()
+        }
+
+        db['nursing_care'].insert_one(care_record)
+
+        return jsonify({
+            'message': 'Cuidados de enfermería guardados correctamente',
+            'id_cuidado': care_record['id_cuidado']
+        }), 201
+    except Exception as e:
+        print(f"Error en add_nursing_care: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@medical_bp.route('/appointments/<int:id_atencion>/nursing-care', methods=['GET'])
+@token_required
+@role_required('admin', 'medico', 'enfermero')
+def get_nursing_care(id_atencion):
+    """
+    Obtiene historial de cuidados de enfermería
+    """
+    try:
+        db = get_db()
+
+        pipeline = [
+            {'$match': {'id_atencion': id_atencion}},
+            {'$lookup': {
+                'from': 'users',
+                'localField': 'id_enfermero',
+                'foreignField': '_id',
+                'as': 'enfermero'
+            }},
+            {'$unwind': {'path': '$enfermero', 'preserveNullAndEmptyArrays': True}},
+            {'$project': {
+                'id_cuidado': 1,
+                'diagnostico_enfermeria': 1,
+                'objetivos': 1,
+                'intervenciones': 1,
+                'evaluacion': 1,
+                'estado': 1,
+                'observaciones': 1,
+                'fecha_registro': 1,
+                'enfermero_nombre': _nurse_name_projection()
+            }},
+            {'$sort': {'fecha_registro': -1}}
+        ]
+
+        records = list(db['nursing_care'].aggregate(pipeline))
+        return jsonify([serialize_doc(r) for r in records]), 200
+    except Exception as e:
+        print(f"Error en get_nursing_care: {e}")
+        return jsonify({'error': str(e)}), 500

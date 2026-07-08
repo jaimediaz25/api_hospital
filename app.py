@@ -46,10 +46,11 @@ def create_app():
     app.register_blueprint(appointment_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(analytics_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(studies_bp, url_prefix=f'{config.API_PREFIX}')
-    app.register_blueprint(pdf_bp, url_prefix=f'{config.API_PREFIX}')
+    app.register_blueprint(pdf_bp, url_prefix=f'{config.API_PREFIX}/pdf')
     app.register_blueprint(exams_bp, url_prefix=f'{config.API_PREFIX}/exams')
     app.register_blueprint(billing_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(admin_bp, url_prefix=f'{config.API_PREFIX}')
+    
 
     @app.before_request
     def log_request_start():
