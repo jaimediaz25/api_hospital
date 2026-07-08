@@ -1,11 +1,12 @@
 # routes/exams.py
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify, g, send_from_directory, abort
 from middleware.auth_middleware import token_required, role_required
 from utils.database import get_db, serialize_doc, get_next_sequence
 from datetime import datetime
 from bson import ObjectId
 from services.exam_service import ExamService
 from werkzeug.utils import secure_filename
+import os
 
 exams_bp = Blueprint('exams', __name__, url_prefix='/exams')
 
@@ -426,3 +427,34 @@ def delete_exam_results(id_examen):
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+    
+
+
+#---------------------------------------------------------------------------------------------------
+#---------------------------------------------------------------------------------------------------
+
+
+@exams_bp.route('/download/<filename>', methods=['GET'])
+@token_required
+@role_required('admin', 'estudios')
+def download_exam_file(filename):
+    """
+    Descarga un archivo de resultados.
+    Se espera el parámetro 'tipo' en la query string: LABORATORIO o GABINETE.
+    """
+    tipo = request.args.get('tipo', '').upper()
+    if tipo not in ('LABORATORIO', 'GABINETE'):
+        abort(400, 'Tipo de examen no válido')
+
+    # Carpeta base donde se guardan los archivos
+    base_dir = os.path.join('static', 'resultados', tipo.lower())
+    if not os.path.exists(base_dir):
+        abort(404, 'Carpeta no encontrada')
+
+    # Verificar que el archivo existe y está dentro de la carpeta permitida
+    safe_path = os.path.join(base_dir, filename)
+    if not os.path.isfile(safe_path):
+        abort(404, 'Archivo no encontrado')
+
+    # Servir el archivo con send_from_directory (evita path traversal)
+    return send_from_directory(base_dir, filename, as_attachment=True)
