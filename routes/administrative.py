@@ -12,84 +12,325 @@ def _json_body():
     return request.get_json(silent=True) or {}
 
 
+def _pagination_params():
+    page = max(request.args.get('page', default=1, type=int), 1)
+    limit = min(max(request.args.get('limit', default=5, type=int), 1), 50)
+    return page, limit
+
+
+def _pagination_meta(total, page, limit):
+    start = (page - 1) * limit
+    end = start + limit
+
+    return {
+        'page': page,
+        'limit': limit,
+        'total': total,
+        'total_pages': (total + limit - 1) // limit if limit else 1,
+        'has_more': end < total,
+    }
+
+
+def _paginate_list(items, page, limit):
+    items = items or []
+    total = len(items)
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    return items[start:end], _pagination_meta(total, page, limit)
+
+
+def _paginate_patient_groups(response, page, limit):
+    if not isinstance(response, dict):
+        paginated_items, pagination = _paginate_list(response, page, limit)
+
+        return {
+            'data': paginated_items,
+            'pagination': pagination,
+        }
+
+    groups = response.get('groups', []) or []
+    paginated_groups = []
+
+    for group in groups:
+        patients = group.get('patients', []) or []
+        paginated_patients, pagination = _paginate_list(patients, page, limit)
+
+        paginated_groups.append({
+            **group,
+            'patients': paginated_patients,
+            'pagination': pagination,
+        })
+
+    return {
+        **response,
+        'groups': paginated_groups,
+        'pagination': {
+            'page': page,
+            'limit': limit,
+        },
+    }
+
+
+def _paginate_census_sections(response, page, limit):
+    if not isinstance(response, dict):
+        paginated_items, pagination = _paginate_list(response, page, limit)
+
+        return {
+            'data': paginated_items,
+            'pagination': pagination,
+        }
+
+    sections = response.get('sections', []) or []
+    paginated_sections = []
+
+    for section in sections:
+        patients = section.get('data', []) or []
+        paginated_patients, pagination = _paginate_list(patients, page, limit)
+
+        paginated_sections.append({
+            **section,
+            'data': paginated_patients,
+            'pagination': pagination,
+        })
+
+    return {
+        **response,
+        'sections': paginated_sections,
+        'pagination': {
+            'page': page,
+            'limit': limit,
+        },
+    }
+
+
+def _paginate_response(response, page, limit, possible_keys=None):
+    possible_keys = possible_keys or [
+        'data',
+        'items',
+        'patients',
+        'accounts',
+        'activeAccounts',
+        'census',
+        'records',
+        'rows',
+        'results',
+        'movements',
+        'charges',
+        'payments',
+        'cash_cut',
+        'corte_caja',
+        'beds',
+        'camas',
+    ]
+
+    if isinstance(response, list):
+        paginated_items, pagination = _paginate_list(response, page, limit)
+
+        return {
+            'data': paginated_items,
+            'pagination': pagination,
+        }
+
+    if not isinstance(response, dict):
+        return response
+
+    paginated_response = {
+        **response,
+        'pagination': {
+            'page': page,
+            'limit': limit,
+        },
+    }
+
+    found_list = False
+
+    for key in possible_keys:
+        if key in response and isinstance(response.get(key), list):
+            paginated_items, pagination = _paginate_list(
+                response.get(key),
+                page,
+                limit
+            )
+
+            paginated_response[key] = paginated_items
+            paginated_response[f'{key}_pagination'] = pagination
+            found_list = True
+
+    if not found_list:
+        return response
+
+    return paginated_response
+
+
 def _options_response():
     current_id_cama = request.args.get('current_id_cama', type=int)
-    return jsonify(AdministrativeService.get_options(current_id_cama)), 200
+    page, limit = _pagination_params()
+
+    response = AdministrativeService.get_options(current_id_cama)
+
+    return jsonify(
+        _paginate_response(
+            response,
+            page,
+            limit,
+            possible_keys=[
+                'beds',
+                'camas',
+            ],
+        )
+    ), 200
 
 
 def _patients_response():
     search = request.args.get('search', '')
-    return jsonify(AdministrativeService.get_patient_groups(search)), 200
+    page, limit = _pagination_params()
+
+    response = AdministrativeService.get_patient_groups(search)
+
+    return jsonify(
+        _paginate_patient_groups(response, page, limit)
+    ), 200
 
 
 def _patient_detail_response(id_exp):
     patient = AdministrativeService.get_patient_detail(id_exp)
+
     if not patient:
         return jsonify({'error': 'Paciente no encontrado'}), 404
+
     return jsonify(patient), 200
 
 
 def _create_patient_response():
     result, error = AdministrativeService.create_patient(_json_body())
+
     if error:
         return jsonify({'error': error}), 400
+
     return jsonify(result), 201
 
 
 def _update_patient_response(id_exp):
     result, error = AdministrativeService.update_patient(id_exp, _json_body())
+
     if error:
         return jsonify({'error': error}), 400
+
     return jsonify(result), 200
 
 
 def _census_response():
     search = request.args.get('search', '')
-    return jsonify(AdministrativeService.get_census(search)), 200
+    page, limit = _pagination_params()
+
+    response = AdministrativeService.get_census(search)
+
+    return jsonify(
+        _paginate_census_sections(response, page, limit)
+    ), 200
 
 
 def _cash_cut_response():
     date_value = request.args.get('date')
     search = request.args.get('search', '')
-    return jsonify(AdministrativeService.get_cash_cut(date_value, search)), 200
+    page, limit = _pagination_params()
+
+    response = AdministrativeService.get_cash_cut(date_value, search)
+
+    return jsonify(
+        _paginate_response(
+            response,
+            page,
+            limit,
+            possible_keys=[
+                'data',
+                'items',
+                'records',
+                'rows',
+                'results',
+                'movements',
+                'activeAccounts',
+                'accounts',
+                'charges',
+                'payments',
+                'cash_cut',
+                'corte_caja',
+            ],
+        )
+    ), 200
 
 
 def _accounts_response():
     search = request.args.get('search', '')
-    return jsonify(AdministrativeService.get_active_accounts(search)), 200
+    page, limit = _pagination_params()
+
+    response = AdministrativeService.get_active_accounts(search)
+
+    return jsonify(
+        _paginate_response(
+            response,
+            page,
+            limit,
+            possible_keys=[
+                'data',
+                'items',
+                'accounts',
+                'activeAccounts',
+                'patients',
+                'records',
+                'rows',
+                'results',
+            ],
+        )
+    ), 200
 
 
 def _account_detail_response(id_atencion):
     account = AdministrativeService.get_account_detail(id_atencion)
+
     if not account:
         return jsonify({'error': 'Cuenta no encontrada'}), 404
+
     return jsonify(account), 200
 
 
 def _account_documents_response(id_atencion):
     account = AdministrativeService.get_account_detail(id_atencion)
+
     if not account:
         return jsonify({'error': 'Cuenta no encontrada'}), 404
+
     return jsonify(account.get('documents', [])), 200
 
 
 def _add_charge_response(id_atencion):
     result, error = AdministrativeService.add_charge(id_atencion, _json_body())
+
     if error:
         return jsonify({'error': error}), 400
+
     return jsonify(result), 201
 
 
 def _remove_charge_response(id_atencion, charge_id):
     if not AdministrativeService.remove_charge(id_atencion, charge_id):
         return jsonify({'error': 'Cargo no encontrado'}), 404
+
     return jsonify({'message': 'Cargo eliminado correctamente'}), 200
 
 
 def _register_payment_response(id_atencion):
-    result, error = AdministrativeService.register_payment(id_atencion, _json_body(), g.user['user_id'])
+    result, error = AdministrativeService.register_payment(
+        id_atencion,
+        _json_body(),
+        g.user['user_id']
+    )
+
     if error:
         return jsonify({'error': error}), 400
+
     return jsonify(result), 201
 
 
@@ -115,6 +356,7 @@ def get_admin_patients():
 def search_admin_patients():
     query = request.args.get('q', request.args.get('search', ''))
     limit = min(request.args.get('limit', default=10, type=int), 50)
+
     return jsonify(AdministrativeService.quick_search(query, limit)), 200
 
 
@@ -230,9 +472,14 @@ def register_admin_payment(id_atencion):
 
 
 def _close_account_response(id_atencion):
-    result, error = AdministrativeService.close_account(id_atencion, g.user['user_id'])
+    result, error = AdministrativeService.close_account(
+        id_atencion,
+        g.user['user_id']
+    )
+
     if error:
         return jsonify({'error': error}), 400
+
     return jsonify({
         'message': 'Cuenta cerrada exitosamente',
         'account': result,
@@ -300,6 +547,7 @@ def get_mobile_patient_management():
 def search_mobile_patient_management():
     query = request.args.get('q', request.args.get('search', ''))
     limit = min(request.args.get('limit', default=10, type=int), 50)
+
     return jsonify(AdministrativeService.quick_search(query, limit)), 200
 
 
