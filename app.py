@@ -31,8 +31,10 @@ def create_app():
     #CORS(app, origins=config.CORS_ORIGINS, supports_credentials=True)
     CORS(
         app,
-        resources={r"/api/*": {"origins": config.CORS_ORIGINS}},
-        supports_credentials=True
+        resources={r"/*": {"origins": config.CORS_ORIGINS}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
     
     # Registrar blueprints
