@@ -1,53 +1,66 @@
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from apscheduler.triggers.cron import CronTrigger
-from datetime import datetime
 import atexit
 
+from apscheduler.schedulers.background import BackgroundScheduler
+
 scheduler = None
+flask_app = None
+
+
+def _automatic_backup():
+    from utils.backups import (
+        cargar_config_automatizacion,
+        limpiar_backups,
+        realizar_backup,
+    )
+
+    config = cargar_config_automatizacion()
+    if not config.get('activo') or flask_app is None:
+        return
+
+    with flask_app.app_context():
+        realizar_backup(
+            tipo=config.get('tipo', 'completa'),
+            formato=config.get('formato', 'json'),
+            colecciones=config.get('colecciones') or None,
+            es_automatico=True,
+        )
+        limpiar_backups(config.get('max_backups', 4))
+
+
+def configure_backup_job(config):
+    if scheduler is None:
+        return
+
+    if scheduler.get_job('backup_automatico'):
+        scheduler.remove_job('backup_automatico')
+
+    if config.get('activo'):
+        scheduler.add_job(
+            _automatic_backup,
+            'interval',
+            minutes=int(config.get('intervalo', 1440)),
+            id='backup_automatico',
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
 
 def init_scheduler(app):
-    """Inicializa el scheduler"""
-    global scheduler
-    
+    global scheduler, flask_app
     if scheduler is not None:
         return scheduler
-    
+
+    flask_app = app
     scheduler = BackgroundScheduler()
-    
-    # Backup diario a las 2 AM
-    @scheduler.scheduled_job(CronTrigger(hour=2, minute=0))
-    def daily_backup():
-        with app.app_context():
-            from utils.backups import realizar_backup, limpiar_backups
-            realizar_backup(tipo='diario', comprimir=True)
-            limpiar_backups(30)  # Mantener 30 backups
-    
-    # Limpieza de logs cada semana
-    @scheduler.scheduled_job(CronTrigger(day_of_week='sun', hour=3, minute=0))
-    def clean_old_logs():
-        with app.app_context():
-            from utils.database import get_collection
-            from datetime import timedelta
-            
-            logs = get_collection('logs')
-            cutoff_date = datetime.now() - timedelta(days=90)
-            result = logs.delete_many({'fecha': {'$lt': cutoff_date}})
-            print(f"Eliminados {result.deleted_count} logs antiguos")
-    
     scheduler.start()
-    
-    # Detener scheduler al salir
-    atexit.register(lambda: scheduler.shutdown())
-    
+
+    from utils.backups import cargar_config_automatizacion
+    configure_backup_job(cargar_config_automatizacion())
+
+    atexit.register(lambda: scheduler.shutdown(wait=False) if scheduler.running else None)
     return scheduler
 
-def add_job(func, trigger, **kwargs):
-    """Agrega un trabajo al scheduler"""
-    if scheduler:
-        return scheduler.add_job(func, trigger, **kwargs)
-    return None
 
 def get_scheduler():
-    """Retorna el scheduler actual"""
     return scheduler

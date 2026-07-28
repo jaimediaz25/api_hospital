@@ -1,6 +1,10 @@
 from utils.database import get_collection, serialize_doc, get_next_sequence
 
 class CatalogService:
+    @staticmethod
+    def _number(value, default=0):
+        return float(value) if value not in (None, '') else float(default)
+
     # ==================== SERVICIOS ====================
     @staticmethod
     def get_services():
@@ -20,9 +24,22 @@ class CatalogService:
                 'serv_cve': 1,
                 'serv_desc': 1,
                 'serv_costo': 1,
+                'serv_costo2': 1,
+                'serv_costo3': 1,
+                'serv_costo4': 1,
+                'serv_costo5': 1,
+                'serv_costo6': 1,
+                'serv_costo7': 1,
+                'serv_costo8': 1,
                 'serv_umed': 1,
                 'serv_activo': 1,
                 'tipo': 1,
+                'proveedor': 1,
+                'grupo': 1,
+                'codigo_sat': 1,
+                'c_cveuni': 1,
+                'c_nombre': 1,
+                'iva': 1,
                 'tipo_desc': '$tipo_info.ser_type_desc'
             }},
             {'$sort': {'id_serv': 1}}
@@ -47,23 +64,23 @@ class CatalogService:
             'id_serv': id_serv,
             'serv_cve': data['serv_cve'],
             'serv_desc': data['serv_desc'],
-            'serv_costo': float(data['serv_costo']),
-            'serv_costo2': float(data.get('serv_costo2', 0)),
-            'serv_costo3': float(data.get('serv_costo3', 0)),
-            'serv_costo4': float(data.get('serv_costo4', 0)),
-            'serv_costo5': float(data.get('serv_costo5', 0)),
-            'serv_costo6': float(data.get('serv_costo6', 0)),
-            'serv_costo7': float(data.get('serv_costo7', 0)),
-            'serv_costo8': float(data.get('serv_costo8', 0)),
+            'serv_costo': CatalogService._number(data['serv_costo']),
+            'serv_costo2': CatalogService._number(data.get('serv_costo2')),
+            'serv_costo3': CatalogService._number(data.get('serv_costo3')),
+            'serv_costo4': CatalogService._number(data.get('serv_costo4')),
+            'serv_costo5': CatalogService._number(data.get('serv_costo5')),
+            'serv_costo6': CatalogService._number(data.get('serv_costo6')),
+            'serv_costo7': CatalogService._number(data.get('serv_costo7')),
+            'serv_costo8': CatalogService._number(data.get('serv_costo8')),
             'serv_umed': data.get('serv_umed', ''),
             'serv_activo': 'SI',
             'tipo': int(data['tipo']),
-            'proveedor': data.get('proveedor', ''),
+            'proveedor': int(data['proveedor']) if str(data.get('proveedor', '')).isdigit() else data.get('proveedor', ''),
             'grupo': data.get('grupo', ''),
             'codigo_sat': data.get('codigo_sat', ''),
             'c_cveuni': data.get('c_cveuni', ''),
             'c_nombre': 'SERVICIO',
-            'iva': float(data.get('iva', 16)) / 100
+            'iva': CatalogService._number(data.get('iva'), 16) / 100
         }
         
         collection.insert_one(service)
@@ -78,13 +95,18 @@ class CatalogService:
         allowed_fields = ['serv_cve', 'serv_desc', 'serv_costo', 'serv_costo2', 
                          'serv_costo3', 'serv_costo4', 'serv_costo5', 'serv_costo6',
                          'serv_costo7', 'serv_costo8', 'serv_umed', 'tipo', 
-                         'proveedor', 'grupo', 'codigo_sat', 'c_cveuni', 'iva']
+                         'proveedor', 'grupo', 'codigo_sat', 'c_cveuni', 'iva',
+                         'serv_activo']
         
         for field in allowed_fields:
             if field in data:
-                if field.startswith('serv_costo') or field == 'iva':
-                    update_data[field] = float(data[field])
+                if field.startswith('serv_costo'):
+                    update_data[field] = CatalogService._number(data[field])
+                elif field == 'iva':
+                    update_data[field] = CatalogService._number(data[field], 16) / 100
                 elif field == 'tipo':
+                    update_data[field] = int(data[field])
+                elif field == 'proveedor' and str(data[field]).isdigit():
                     update_data[field] = int(data[field])
                 else:
                     update_data[field] = data[field]

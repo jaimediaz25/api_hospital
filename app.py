@@ -20,7 +20,10 @@ from routes.pdf import pdf_bp
 from routes.exams import exams_bp
 from routes.billing import billing_bp
 from routes.administrative import admin_bp, mobile_admin_bp
+from routes.backup import backup_bp
+from routes.performance import performance_bp
 from middleware.auth_middleware import token_required
+from scheduler.jobs import init_scheduler
 
 def create_app():
     
@@ -43,7 +46,7 @@ def create_app():
     app.register_blueprint(patients_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(medical_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(beds_bp, url_prefix=f'{config.API_PREFIX}')
-    app.register_blueprint(catalog_bp, url_prefix=f'{config.API_PREFIX}')
+    app.register_blueprint(catalog_bp, url_prefix=f'{config.API_PREFIX}/catalog')
     app.register_blueprint(reports_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(appointment_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(analytics_bp, url_prefix=f'{config.API_PREFIX}')
@@ -52,6 +55,11 @@ def create_app():
     app.register_blueprint(exams_bp, url_prefix=f'{config.API_PREFIX}/exams')
     app.register_blueprint(billing_bp, url_prefix=f'{config.API_PREFIX}')
     app.register_blueprint(admin_bp, url_prefix=f'{config.API_PREFIX}')
+    app.register_blueprint(backup_bp, url_prefix=f'{config.API_PREFIX}/backup')
+    app.register_blueprint(performance_bp, url_prefix=f'{config.API_PREFIX}/performance')
+
+    # Iniciar tareas automáticas después de registrar las rutas.
+    init_scheduler(app)
     
 
     @app.before_request

@@ -16,18 +16,14 @@ class Database:
         return cls._instance
     
     def _initialize(self):
-        try:
-            self.client = MongoClient(
-                os.getenv('MONGO_URI', 'mongodb://localhost:27017/'),
-                serverSelectionTimeoutMS=5000
-            )
-            # Test connection
-            self.client.admin.command('ping')
-            self.db = self.client[os.getenv('MONGO_DB', 'hospital_db')]
-            print("✅ Conectado a MongoDB exitosamente")
-        except Exception as e:
-            print(f"❌ Error conectando a MongoDB: {e}")
-            raise
+        # MongoClient conecta de forma diferida. Así Flask puede iniciar aunque
+        # Atlas esté temporalmente sin conexión y /backup/health puede reportarlo.
+        self.client = MongoClient(
+            os.getenv('MONGO_URI', 'mongodb://localhost:27017/'),
+            serverSelectionTimeoutMS=5000,
+            connect=False
+        )
+        self.db = self.client[os.getenv('MONGO_DB', 'hospital_db')]
     
     def get_db(self):
         return self.db

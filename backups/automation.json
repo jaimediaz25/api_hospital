@@ -1,0 +1,8 @@
+{
+  "activo": true,
+  "tipo": "completa",
+  "formato": "json",
+  "intervalo": 525000,
+  "colecciones": [],
+  "max_backups": 4
+}

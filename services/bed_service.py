@@ -9,6 +9,10 @@ class BedService:
         query = {}
         if area:
             query['area'] = area
+        if status == 'libre':
+            query['ocupada'] = 0
+        elif status == 'ocupada':
+            query['ocupada'] = 1
         
         beds = list(collection.find(query).sort('numero', 1))
         
@@ -68,7 +72,7 @@ class BedService:
         
         for field in allowed_fields:
             if field in data:
-                update_data[field] = data[field]
+                update_data[field] = int(data[field]) if field == 'ocupada' else data[field]
         
         if not update_data:
             return None
