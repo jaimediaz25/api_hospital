@@ -104,6 +104,23 @@ def get_consent(id_exp, id_atencion):
     )
 
 
+@pdf_bp.route('/identification-sheet/<int:id_exp>/<int:id_atencion>', methods=['GET'])
+@token_required
+def get_identification_sheet(id_exp, id_atencion):
+    """Genera la ficha o tarjeta de identificación del paciente."""
+    pdf_file = PDFService.generate_identification_sheet(id_exp, id_atencion)
+
+    if not pdf_file:
+        return jsonify({'error': 'Error generando PDF'}), 500
+
+    return send_file(
+        pdf_file,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'ficha_identificacion_{id_atencion}.pdf'
+    )
+
+
 # ==================== PDF DE SIGNOS VITALES ====================
 @pdf_bp.route('/vital-signs/<int:id_signos>', methods=['GET'])
 def get_vital_signs_pdf(id_signos):

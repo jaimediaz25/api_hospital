@@ -304,6 +304,100 @@ durante el tiempo que la ley establece."""
         temp_file.close()
         
         return temp_file.name
+
+    @staticmethod
+    def generate_identification_sheet(id_exp, id_atencion):
+        """Genera la ficha de identificación con el formato del proyecto Mongo."""
+        data = PDFService._get_patient_data(id_exp, id_atencion)
+        atencion = data['atencion']
+        paciente = data['paciente']
+        medico = data['medico']
+
+        pdf = FPDF('L', 'mm', (210, 135))
+        pdf.set_margins(15, 12, 15)
+        pdf.set_auto_page_break(True, 15)
+        pdf.add_page()
+
+        pdf.set_font('Arial', 'B', 12)
+        pdf.cell(0, 8, 'TARJETA DE IDENTIFICACIÓN', ln=True, align='C')
+
+        fecha = atencion.get('fecha_ing')
+        if fecha:
+            if isinstance(fecha, str):
+                try:
+                    fecha = datetime.strptime(fecha.split('T')[0], '%Y-%m-%d')
+                except (TypeError, ValueError):
+                    fecha = datetime.now()
+            fecha_str = fecha.strftime('%d/%m/%Y %H:%M')
+        else:
+            fecha_str = ''
+
+        pdf.set_font('Arial', '', 8)
+        pdf.cell(0, 5, f'Fecha: {fecha_str}', ln=True, align='R')
+        pdf.ln(2)
+
+        pdf.set_font('Arial', 'B', 9)
+        pdf.cell(0, 6, 'Datos del Paciente', ln=True)
+        pdf.set_font('Arial', '', 8)
+
+        nombre = (
+            f"{paciente.get('papell', '')} "
+            f"{paciente.get('sapell', '')} "
+            f"{paciente.get('nom_pac', '')}"
+        ).strip()
+
+        pdf.cell(12, 5, 'Paciente:', 0, 0)
+        pdf.cell(60, 5, f'{id_exp} - {nombre}', 0, 0)
+        pdf.cell(18, 5, 'Nacimiento:', 0, 0)
+
+        fecnac = paciente.get('fecnac')
+        if isinstance(fecnac, str):
+            try:
+                fecnac = datetime.strptime(fecnac.split('T')[0], '%Y-%m-%d')
+            except (TypeError, ValueError):
+                fecnac = None
+        nacimiento = fecnac.strftime('%d/%m/%Y') if fecnac else 'No especificado'
+        pdf.cell(40, 5, nacimiento, 0, 1)
+
+        pdf.cell(28, 5, 'CURP:', 0, 0)
+        pdf.cell(40, 5, str(paciente.get('curp') or 'No especificado'), 0, 0)
+        pdf.cell(18, 5, 'Tel:', 0, 0)
+        pdf.cell(0, 5, str(paciente.get('tel') or 'No especificado'), 0, 1)
+
+        medico_nombre = (
+            f"{medico.get('papell', '')} "
+            f"{medico.get('sapell', '')} "
+            f"{medico.get('nombre', medico.get('username', ''))}"
+        ).strip() or 'No especificado'
+
+        pdf.cell(15, 5, 'Ingreso:', 0, 0)
+        pdf.cell(45, 5, fecha_str, 0, 0)
+        pdf.cell(15, 5, 'Médico:', 0, 0)
+        pdf.cell(0, 5, medico_nombre, 0, 1)
+
+        pdf.cell(25, 5, 'Servicio:', 0, 0)
+        pdf.cell(40, 5, str(atencion.get('area') or 'No especificado'), 0, 1)
+
+        pdf.cell(12, 5, 'DX:', 0, 0)
+        pdf.multi_cell(0, 5, str(atencion.get('motivo') or 'No especificado'))
+
+        pdf.cell(18, 5, 'Alergias:', 0, 0)
+        pdf.multi_cell(0, 5, str(atencion.get('alergias') or 'No especificado'))
+
+        pdf.ln(2)
+        pdf.cell(
+            0,
+            5,
+            'Riesgo de Caídas: _______________    Riesgo de UPP: _______________',
+            0,
+            1,
+        )
+
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        pdf.output(temp_file.name)
+        temp_file.close()
+
+        return temp_file.name
     
     @staticmethod
     def generate_vital_signs_pdf(id_signos):

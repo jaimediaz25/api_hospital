@@ -13,12 +13,32 @@ def _json_body():
 
 
 def _pagination_params():
+    fetch_all = request.args.get('all', default='false').lower() in (
+        '1',
+        'true',
+        'yes',
+        'si',
+    )
+
+    if fetch_all:
+        return 1, None
+
     page = max(request.args.get('page', default=1, type=int), 1)
     limit = min(max(request.args.get('limit', default=5, type=int), 1), 50)
     return page, limit
 
 
 def _pagination_meta(total, page, limit):
+    if limit is None:
+        return {
+            'page': 1,
+            'limit': total,
+            'total': total,
+            'total_pages': 1,
+            'has_more': False,
+            'all': True,
+        }
+
     start = (page - 1) * limit
     end = start + limit
 
@@ -34,6 +54,9 @@ def _pagination_meta(total, page, limit):
 def _paginate_list(items, page, limit):
     items = items or []
     total = len(items)
+
+    if limit is None:
+        return items, _pagination_meta(total, 1, None)
 
     start = (page - 1) * limit
     end = start + limit
