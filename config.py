@@ -7,7 +7,7 @@ load_dotenv()
 class Config:
     # MongoDB
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
-    MONGO_DB = os.getenv('MONGO_DB', 'hospital_db')
+    MONGO_DB = os.getenv('MONGO_DB', 'ineo_db2')
     
     # JWT
     SECRET_KEY = os.getenv('SECRET_KEY', 'tu-clave-secreta-muy-segura-cambiar-en-produccion')
