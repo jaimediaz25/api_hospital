@@ -1,0 +1,77 @@
+name: SonarQube - API Hospital
+on:
+  push:
+    branches: [main, develop, "feature/**"]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  test-and-analyze:
+    name: Tests, coverage and SonarQube Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-test.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-test.txt
+      - name: Run tests and generate coverage
+        env:
+          MONGO_URI: mongodb://localhost:27017/
+          MONGO_DB: hospital_test
+          SECRET_KEY: ci-test-secret
+          JWT_SECRET_KEY: ci-test-jwt-secret
+        run: |
+          python -m pytest --cov=. --cov-report=term-missing --cov-report=xml:coverage.xml --junitxml=test-results.xml
+      - name: Verify coverage report
+        run: |
+          test -s coverage.xml
+          ls -lh coverage.xml
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-hospital-test-reports
+          path: |
+            coverage.xml
+            test-results.xml
+          if-no-files-found: warn
+          retention-days: 14
+      - name: SonarQube scan and Quality Gate
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=jaimediaz25_api_hospital
+            -Dsonar.organization=jaimediaz25
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
